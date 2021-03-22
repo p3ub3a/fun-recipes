@@ -1,7 +1,7 @@
 package com.funrecipes.aop;
 
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -17,10 +17,12 @@ public aspect Monitoring {
 	private static final int MIN_TIME_POST_REQUEST = 30;
 	
 	private static final int MAX_GET_REQUESTS = 3;
-	private static final int MIN_TIME_GET_REQUEST = 30;
+	private static final int MIN_TIME_GET_REQUEST = 35;
 	
-	private static List<LocalDateTime> postDateRequests = new ArrayList<LocalDateTime>();
-	private static List<LocalDateTime> getDateRequests = new ArrayList<LocalDateTime>();
+	private static List<Long> postDateRequests = new ArrayList<Long>();
+	private static List<Long> getDateRequests = new ArrayList<Long>();
+	
+	private static int failedAttempts = 0;
 	
 	private Logger logger = LoggerFactory.getLogger(Monitoring.class);
 	
@@ -40,9 +42,9 @@ public aspect Monitoring {
 			logger.info("Trying to store recipes... ");
 			proceed(recipesServiceImpl, recipeDTOs);
 		} catch(IllegalArgumentException e) {
-			logger.warn("Execution failed, exception message: " + e.getMessage());
-			
-			return "bad request, make sure each recipe has at least one ingredient";
+			logger.warn("Execution failed, number of failed attemts: " + failedAttempts + " ; exception message: " + e.getMessage());
+			failedAttempts++;
+			return e.getMessage();
 		}
 		
 		logger.info("Stored recipes");
@@ -52,39 +54,37 @@ public aspect Monitoring {
 	List<RecipeDTO> around(RecipesServiceImpl recipesServiceImpl) throws MaxRequestsReachedException: getRecipes() 
 	&& target(recipesServiceImpl) {
 		List<RecipeDTO> recipeDTOs = null;
-		try {
-			logger.info("Trying to get recipes... ");
-			checkNumberOfCalls(MAX_GET_REQUESTS, MIN_TIME_GET_REQUEST, getDateRequests);
-			recipeDTOs = proceed(recipesServiceImpl);
-		} catch(IllegalArgumentException e) {
-			logger.warn("Execution failed, exception message: " + e.getMessage());
-		}
-		logger.info("Got recipes");
+		checkNumberOfCalls(MAX_GET_REQUESTS, MIN_TIME_GET_REQUEST, getDateRequests);
+		recipeDTOs = proceed(recipesServiceImpl);
 		return recipeDTOs;
 	}
 	
-	private void checkNumberOfCalls(int numberOfRequests, int minTime, List<LocalDateTime> dateRequests) throws MaxRequestsReachedException {
+	private void checkNumberOfCalls(int numberOfRequests, int minTime, List<Long> dateRequests) throws MaxRequestsReachedException {
 		int counter = 0;
+		int retryTime = 0;
 		
+		long now = LocalDateTime.now().toEpochSecond(ZoneOffset.UTC);
 		System.out.println(dateRequests);
 		if(dateRequests.size() >= numberOfRequests) {
-			for (Iterator<LocalDateTime> iterator = dateRequests.iterator(); iterator.hasNext();) {
-				LocalDateTime date = iterator.next();
-				if(date.isAfter(LocalDateTime.now().minus(minTime, ChronoUnit.SECONDS))) {
+			for (Iterator<Long> iterator = dateRequests.iterator(); iterator.hasNext();) {
+				Long date = iterator.next();
+				int timeDifference = (int) (now - date);
+				if(timeDifference < minTime) {
+					if(retryTime == 0) retryTime = timeDifference;
+					retryTime = timeDifference > retryTime ? timeDifference : retryTime;
 					counter++;
 				} else {
 					iterator.remove();
 				}
 			}
 			
-			System.out.println(counter);
 			if(counter >= numberOfRequests) {
-				throw new MaxRequestsReachedException("Max calls reached (" + numberOfRequests + "), try again in " + minTime +" seconds");
+				throw new MaxRequestsReachedException("Max calls reached (" + numberOfRequests + "), please try again in ", minTime - retryTime);
 			}else {
-				dateRequests.add(LocalDateTime.now());
+				dateRequests.add(LocalDateTime.now().toEpochSecond(ZoneOffset.UTC));
 			}
 		}else {
-			dateRequests.add(LocalDateTime.now());
+			dateRequests.add(LocalDateTime.now().toEpochSecond(ZoneOffset.UTC));
 			System.out.println(dateRequests);
 		}
 	}

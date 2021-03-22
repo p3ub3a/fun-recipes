@@ -15,6 +15,7 @@ public class RecipeExceptionHandler {
 		HttpStatus badRequest = HttpStatus.BAD_REQUEST;
 		
 		RecipeException re = new RecipeException(e.getMessage(), 
+				e.getTimer(),
 				badRequest, 
 				ZonedDateTime.now());
 		

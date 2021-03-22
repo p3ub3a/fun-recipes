@@ -32,6 +32,7 @@ public class RecipesServiceImpl implements RecipesService{
 
 	@Transactional
 	public String addRecipes(List<RecipeDTO> recipeDTOs) throws MaxRequestsReachedException{
+		clearRepos();
 		
 		for(int i = 0; i < recipeDTOs.size(); i++) {
 			Recipe recipe = new Recipe();
@@ -80,5 +81,9 @@ public class RecipesServiceImpl implements RecipesService{
 		ingredientDTO.setAmount(ingredient.getAmount());
 		return ingredientDTO;
 	}
-
+	
+	private void clearRepos() {
+		ingredientRepository.deleteAll();
+		recipeRepository.deleteAll();
+	}
 }

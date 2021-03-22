@@ -38,11 +38,7 @@ export class RecipeService {
 
     storeRecipes(){
         const headers = new HttpHeaders().set('Content-Type', 'application/json; charset=utf-8');
-        return this.http.post("http://localhost:8080/recipes", this.getRecipes(), {headers: headers}).subscribe(
-            response => {
-                console.log(response);
-            }
-        );
+        return this.http.post("http://localhost:8080/recipes", this.getRecipes(), {headers: headers});
     }
 
     fetchRecipes(){
